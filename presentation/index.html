@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HAIG — Human-AI Integrated Governance</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0a;--bg2:#111;--bg3:#151515;--g:#00FF41;--gg:rgba(0,255,65,.12);--r:#FF3B30;--b:#007AFF;--y:#FFCC00;--cyan:#22D3EE;--pu:#AF7FDD;--t:#E8E8E8;--t2:#999;--t3:#555;--bd:#1c1c1c;--bd2:#262626}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t);font-family:'SF Mono',SFMono-Regular,ui-monospace,Consolas,'Liberation Mono',Menlo,monospace}
+
+/* Scanline overlay */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.02) 2px,rgba(0,0,0,.02) 3px)}
+
+/* Progress */
+#bar{height:2px;background:var(--g);box-shadow:0 0 6px var(--gg);position:fixed;top:0;left:0;z-index:10000;width:0;transition:width .3s}
+
+/* HUD */
+#hud{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:space-between;padding:6px 24px;font-size:11px;color:var(--t3);background:#060606;border-top:1px solid var(--bd)}
+#hud .nav{display:flex;gap:8px}
+#hud button{background:none;border:1px solid #333;color:var(--t2);font:10px/1 monospace;padding:5px 14px;cursor:pointer;transition:all .15s}
+#hud button:hover{border-color:var(--g);color:var(--g)}
+
+/* Slides */
+.S{position:absolute;inset:0;bottom:28px;opacity:0;transform:translateY(6px);transition:opacity .3s,transform .3s;pointer-events:none;display:flex;align-items:center;justify-content:center;padding:48px 72px;overflow:hidden}
+.S.on{opacity:1;transform:none;pointer-events:auto;z-index:1}
+.S.split{display:grid;grid-template-columns:1fr 1fr;padding:0}
+.S.full-bleed{padding:0}
+
+/* Layout */
+.L,.R{padding:48px;display:flex;flex-direction:column;justify-content:center;overflow-y:auto}
+.R{border-left:1px solid var(--bd);background:var(--bg2)}
+.center{text-align:center;max-width:1000px;margin:0 auto;width:90%}
+.wide{max-width:1200px;width:94%;margin:0 auto}
+
+/* Type */
+h1{font-size:clamp(2.6rem,4.5vw,3.8rem);font-weight:700;line-height:1.1;letter-spacing:-1.5px}
+h2{font-size:clamp(1.4rem,2.5vw,2rem);font-weight:600;line-height:1.3;letter-spacing:-.5px;margin-bottom:.8rem}
+p{font-size:clamp(.95rem,1.4vw,1.15rem);color:var(--t2);max-width:650px;line-height:1.7;margin-bottom:.4rem}
+.g{color:var(--g)}.r{color:var(--r)}.b{color:var(--b)}.y{color:var(--y)}.cyan{color:var(--cyan)}.pu{color:var(--pu)}
+.gw{text-shadow:0 0 8px var(--gg),0 0 30px var(--gg)}
+.tg{font-size:10px;color:var(--t3);letter-spacing:6px;text-transform:uppercase;margin-bottom:1rem}
+.dv{width:48px;height:2px;background:var(--g);margin:.6rem 0;opacity:.3}
+.sub{font-size:12px;color:var(--t3);margin-top:1.8rem;letter-spacing:.5px}
+.bottom{position:absolute;bottom:44px;left:0;right:0;text-align:center;font-size:13px;color:var(--t3);padding:0 48px}
+.note{font-size:12px;color:var(--t3);margin-top:.8rem;text-align:center}
+
+/* ========================================
+   TERMINAL — realistic Claude Code style
+   ======================================== */
+.trm{background:#0d0d0d;border:1px solid var(--bd2);font-size:13.5px;line-height:1.75;position:relative;overflow:hidden;margin:.6rem 0;width:100%;border-radius:6px}
+.trm.narrow{max-width:820px;margin-left:auto;margin-right:auto}
+.trm-bar{background:#181818;padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #1f1f1f}
+.trm-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.trm-title{color:#666;font-size:11px;margin-left:10px;letter-spacing:.3px}
+.trm-body{padding:14px 18px;overflow-y:auto;max-height:60vh}
+.trm .ln{opacity:0;transform:translateX(-3px);transition:all .2s}
+.trm .ln.sh{opacity:1;transform:none}
+.trm .ln+.ln{margin-top:1px}
+
+/* Terminal text classes */
+.pr{color:#4EC9B0}                 /* prompt green */
+.cmd{color:var(--t)}               /* command text */
+.out{color:#777}                   /* output dim */
+.ok{color:var(--g)}                /* success */
+.er{color:var(--r)}                /* error */
+.warn{color:var(--y)}              /* warning */
+.hl{color:var(--y);background:rgba(255,204,0,.06);padding:0 3px;border-radius:2px}
+.cm{color:#bbb}                    /* comment/content */
+.dim{color:#444}                   /* very dim */
+.path{color:var(--cyan)}           /* file paths */
+.tool{color:var(--pu);font-weight:600} /* tool names */
+.role-sa{color:var(--b);font-weight:600}
+.role-ca{color:var(--g);font-weight:600}
+.role-cc{color:var(--y);font-weight:600}
+.role-aa{color:var(--r);font-weight:600}
+
+/* Claude Code specific styling */
+.cc-prompt{color:#666;margin-right:4px}
+.cc-tool{display:inline-flex;align-items:center;gap:4px;background:#1a1a1a;border:1px solid #2a2a2a;padding:1px 8px;border-radius:3px;font-size:12px;color:var(--pu);margin:2px 0}
+.cc-status{display:inline-flex;align-items:center;gap:4px}
+.cc-check{color:var(--g)}
+.cc-x{color:var(--r)}
+.cc-spinner{display:inline-block;color:var(--y);animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.cursor-blink::after{content:'\2588';animation:blink 1s step-end infinite;color:var(--g);font-size:.9em}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* Cards */
+.card{border:1px solid var(--bd2);padding:18px 20px;margin:6px 0;background:var(--bg3);border-radius:4px;opacity:0;transform:translateY(6px);transition:all .4s}
+.card.sh{opacity:1;transform:none}
+.card-role{font-size:11px;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px}
+.card-title{font-size:16px;font-weight:600;margin-bottom:6px}
+.card-desc{font-size:13.5px;color:var(--t2);line-height:1.55}
+.card-rule{font-size:12px;color:var(--t3);margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)}
+
+/* Flow */
+.flow{display:flex;align-items:center;gap:0;margin:1.5rem 0;flex-wrap:wrap;justify-content:center}
+.flow-box{padding:12px 16px;border:1px solid var(--bd2);font-size:12px;font-weight:500;background:var(--bg3);text-align:center;min-width:105px;border-radius:3px;opacity:0;transition:all .4s}
+.flow-box.sh{opacity:1}
+.flow-box.active{border-color:rgba(0,255,65,.5);color:var(--g);background:rgba(0,255,65,.04);box-shadow:0 0 10px var(--gg)}
+.flow-arr{font-size:16px;color:#333;opacity:0;transition:opacity .3s;padding:0 5px}.flow-arr.sh{opacity:1}
+
+/* Panels */
+.panel{border:1px solid;padding:18px;margin:5px;border-radius:4px}
+.panel.blue{border-color:rgba(0,122,255,.25);background:rgba(0,122,255,.03)}
+.panel.red{border-color:rgba(255,59,48,.25);background:rgba(255,59,48,.03)}
+.panel.green{border-color:rgba(0,255,65,.25);background:rgba(0,255,65,.03)}
+.panel-label{font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;font-weight:600}
+
+/* Stats */
+.stat-row{display:flex;align-items:center;gap:16px;margin:8px 0;opacity:0;transform:translateX(-6px);transition:all .4s}
+.stat-row.sh{opacity:1;transform:none}
+.stat-label{font-size:14px;color:var(--t2);min-width:220px;text-align:right}
+.stat-bar{height:30px;background:var(--g);box-shadow:0 0 6px var(--gg);display:flex;align-items:center;padding:0 12px;font-size:13px;font-weight:700;color:var(--bg);border-radius:2px;transition:width 1s cubic-bezier(.16,1,.3,1);width:0}
+
+/* Fade lines */
+.fade-line{opacity:0;transition:opacity .8s}
+
+/* Compare */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:0;height:100%}
+.compare-col{padding:36px 40px;display:flex;flex-direction:column;justify-content:center}
+.compare-col.before{background:rgba(255,59,48,.015);border-right:1px solid rgba(255,59,48,.12)}
+.compare-col.after{background:rgba(0,255,65,.015)}
+.compare-label{font-size:10px;letter-spacing:4px;text-transform:uppercase;margin-bottom:1.2rem;font-weight:600}
+.compare-item{margin-bottom:1.3rem;opacity:0;transform:translateY(5px);transition:all .4s}
+.compare-item.sh{opacity:1;transform:none}
+.compare-item h3{font-size:13px;font-weight:600;margin-bottom:3px}
+.compare-item p{font-size:12.5px;line-height:1.6;margin:0;max-width:none}
+
+/* Three panel */
+.three-panel{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;width:100%}
+.three-panel .panel{opacity:0;transition:all .5s}
+.three-panel .panel.sh{opacity:1}
+.three-panel .panel p{font-size:13px;max-width:none}
+
+/* Split half */
+.split-half{display:grid;grid-template-columns:1fr 1fr;gap:0;height:100%;width:100%}
+.split-half>div{padding:36px 32px;display:flex;flex-direction:column;justify-content:center;overflow-y:auto}
+.split-half>div:last-child{border-left:1px solid var(--bd);background:var(--bg2)}
+</style>
+</head>
+<body>
+<div id="bar"></div>
+
+<!-- ============================================ -->
+<!-- S1: THE HOOK                                 -->
+<!-- ============================================ -->
+<div class="S on" data-i="0">
+<div class="center">
+<h1 style="font-size:clamp(1.6rem,3.2vw,2.5rem);color:var(--t);margin-bottom:2rem;line-height:1.4"><span id="typewriter"></span><span class="cursor-blink" id="tw-cursor"></span></h1>
+<div style="opacity:0;transition:opacity 1s" id="hook-body">
+<p style="margin:0 auto;text-align:center;font-size:clamp(1rem,1.5vw,1.2rem)">You already know this is a problem.<br>You've been working around it with better prompts.</p>
+<p style="margin:1.2rem auto 0;text-align:center;font-size:clamp(1.1rem,1.6vw,1.3rem);color:var(--t)">It's not working.</p>
+</div>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S2: THE COLLAPSE                             -->
+<!-- ============================================ -->
+<div class="S" data-i="1">
+<div class="center">
+<div class="tg">The Problem</div>
+<h2>Same model. Same blind spot. <span class="r">Twice.</span></h2>
+<div class="trm narrow">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">claude-code &mdash; same context window</span></div>
+<div class="trm-body">
+<div class="ln" data-d="0"><span class="dim">--- ROUND 1: AI AS DEVELOPER ---</span></div>
+<div class="ln" data-d="200"><span class="cc-prompt">&gt;</span> <span class="cm">"Build a config parser that reads TOML files"</span></div>
+<div class="ln" data-d="500"></div>
+<div class="ln" data-d="600"><span class="cc-tool">Write</span> <span class="path">src/config.rs</span></div>
+<div class="ln" data-d="800"><span class="out">  fn parse_config(path: &amp;str) -&gt; Config {</span></div>
+<div class="ln" data-d="900"><span class="out">      let content = fs::read_to_string(path).<span class="er">unwrap()</span>;</span></div>
+<div class="ln" data-d="1000"><span class="out">      toml::from_str(&amp;content).<span class="er">unwrap()</span></span></div>
+<div class="ln" data-d="1100"><span class="out">  }</span></div>
+<div class="ln" data-d="1300"><span class="cc-check">&#10003;</span> <span class="out">Config parser implemented.</span></div>
+<div class="ln" data-d="1600"></div>
+<div class="ln" data-d="1700"><span class="dim">--- ROUND 2: SAME AI AS REVIEWER ---</span></div>
+<div class="ln" data-d="1900"><span class="cc-prompt">&gt;</span> <span class="cm">"Review parse_config for production readiness"</span></div>
+<div class="ln" data-d="2200"></div>
+<div class="ln" data-d="2300"><span class="out">  The function is clean and well-structured.</span></div>
+<div class="ln" data-d="2500"><span class="out">  unwrap() is appropriate here -- if config is</span></div>
+<div class="ln" data-d="2600"><span class="out">  missing, the app should fail fast.</span></div>
+<div class="ln" data-d="2800"><span class="cc-check">&#10003;</span> <span class="ok">Rating: Production ready.</span></div>
+<div class="ln" data-d="3200"></div>
+<div class="ln" data-d="3300"><span class="dim">--- REALITY ---</span></div>
+<div class="ln" data-d="3500"><span class="pr">$</span> <span class="cmd">echo "invalid { toml" &gt; config.toml && ./myapp</span></div>
+<div class="ln" data-d="3800"><span class="er">thread 'main' panicked at 'called unwrap()'</span></div>
+<div class="ln" data-d="4000"><span class="er">Process crashed. No error message. No recovery.</span></div>
+</div>
+</div>
+<p class="note">The reviewer defended the developer's decision because they share the same assumptions.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S3: THE COST                                 -->
+<!-- ============================================ -->
+<div class="S" data-i="2">
+<div class="center">
+<div class="tg">Evidence</div>
+<h2><span class="g">grep</span> doesn't lie. Your AI does.</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:1rem 0">
+<div class="trm"><div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div></div><div class="trm-body">
+<div class="ln" data-d="0"><span class="pr">$</span> <span class="cmd">ai review auth.rs</span></div>
+<div class="ln" data-d="200"><span class="ok">  No security issues</span></div>
+<div class="ln" data-d="400"></div>
+<div class="ln" data-d="500"><span class="pr">$</span> <span class="cmd">grep -c "unwrap()" auth.rs</span></div>
+<div class="ln" data-d="700"><span class="er">47</span></div>
+</div></div>
+<div class="trm"><div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div></div><div class="trm-body">
+<div class="ln" data-d="100"><span class="pr">$</span> <span class="cmd">ai "handles concurrency?"</span></div>
+<div class="ln" data-d="300"><span class="ok">  Yes, mutex prevents races</span></div>
+<div class="ln" data-d="500"></div>
+<div class="ln" data-d="600"><span class="pr">$</span> <span class="cmd">cargo test --threads=8</span></div>
+<div class="ln" data-d="800"><span class="er">FAILED: 3/5 (data corrupt)</span></div>
+</div></div>
+<div class="trm"><div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div></div><div class="trm-body">
+<div class="ln" data-d="200"><span class="pr">$</span> <span class="cmd">ai "production ready?"</span></div>
+<div class="ln" data-d="400"><span class="ok">  LGTM. Ship it.</span></div>
+<div class="ln" data-d="600"></div>
+<div class="ln" data-d="700"><span class="dim">[6 months later]</span></div>
+<div class="ln" data-d="900"><span class="pr">$</span> <span class="cmd">wc -l tech_debt.md</span></div>
+<div class="ln" data-d="1100"><span class="er">2,847</span></div>
+</div></div>
+</div>
+<p style="margin:.3rem auto 0;text-align:center">Not maliciously. Structurally. It can't adversarially test its own assumptions.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S4: THE PRINCIPLE                            -->
+<!-- ============================================ -->
+<div class="S split" data-i="3">
+<div class="L" style="text-align:center">
+<div class="tg" style="color:var(--r)">Before</div>
+<h2 style="font-size:1.3rem">One agent. Four jobs.<br>All self-referential.</h2>
+<div style="margin:2rem auto;width:200px;height:200px;border:2px solid rgba(255,59,48,.4);border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;box-shadow:0 0 30px rgba(255,59,48,.05)">
+<span style="font-size:16px;color:var(--r);font-weight:600">AI</span>
+<div style="position:absolute;top:-14px;font-size:11px;color:var(--t3)">design</div>
+<div style="position:absolute;bottom:-14px;font-size:11px;color:var(--t3)">approve</div>
+<div style="position:absolute;left:-20px;font-size:11px;color:var(--t3)">review</div>
+<div style="position:absolute;right:-16px;font-size:11px;color:var(--t3)">code</div>
+</div>
+</div>
+<div class="R" style="text-align:center">
+<div class="tg" style="color:var(--g)">After &mdash; HAIG</div>
+<h2 style="font-size:1.3rem"><span class="g">Stop suggesting behavior.<br>Start enforcing outcomes.</span></h2>
+<div style="margin:1.5rem auto;max-width:300px;font-size:13px;text-align:left;line-height:2">
+<div style="border:1px solid rgba(0,255,65,.3);padding:10px 14px;margin:5px 0;text-align:center;border-radius:3px;background:rgba(0,255,65,.02)"><span class="g">AUTHORITY</span> <span class="dim">(Human)</span></div>
+<div style="text-align:center;color:#333;font-size:10px">&#9474;</div>
+<div style="display:flex;gap:6px">
+<div style="border:1px solid rgba(0,122,255,.3);padding:8px 10px;flex:1;text-align:center;border-radius:3px;background:rgba(0,122,255,.02)"><span class="b">ARCHITECT</span><br><span class="dim" style="font-size:10px">cannot code</span></div>
+<div style="border:1px solid rgba(255,59,48,.3);padding:8px 10px;flex:1;text-align:center;border-radius:3px;background:rgba(255,59,48,.02)"><span class="r">AUDITOR</span><br><span class="dim" style="font-size:10px">cannot approve</span></div>
+</div>
+<div style="text-align:center;color:#333;font-size:10px">&#9474;</div>
+<div style="border:1px solid rgba(255,204,0,.3);padding:10px 14px;margin:5px 0;text-align:center;border-radius:3px;background:rgba(255,204,0,.02)"><span class="y">EXECUTOR</span> <span class="dim">(cannot design)</span></div>
+</div>
+</div>
+<div class="bottom">Four roles. Hard boundaries. A structural separation of powers.</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S5: FOUR ROLES                               -->
+<!-- ============================================ -->
+<div class="S" data-i="4">
+<div style="max-width:1100px;width:92%">
+<div class="tg" style="text-align:center">The Framework</div>
+<h2 style="text-align:center">Separation of powers. Not separation of prompts.</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:1rem">
+<div class="card" data-d="0"><div class="card-role g">Authority</div><div class="card-title">The Human</div><div class="card-desc">Ratifies every decision. Sets constraints. Breaks deadlocks.</div><div class="card-rule">Cannot be overridden. By anything. Ever.</div></div>
+<div class="card" data-d="200"><div class="card-role b">Architect</div><div class="card-title">AI &mdash; Design Context</div><div class="card-desc">Drafts blueprints, defines gate checks. Pushes back when the Authority's request has a flaw.</div><div class="card-rule">CANNOT execute code. CANNOT approve own designs.</div></div>
+<div class="card" data-d="400"><div class="card-role r">Auditor</div><div class="card-title">AI &mdash; Adversarial (Different Model)</div><div class="card-desc">Attacks the Architect's designs. Finds what was missed.</div><div class="card-rule">CANNOT approve own findings. Fresh context only.</div></div>
+<div class="card" data-d="600"><div class="card-role y">Executor</div><div class="card-title">AI &mdash; Implementation</div><div class="card-desc">Writes code chunk by chunk against the blueprint. Runs gates. Reports results.</div><div class="card-rule">CANNOT make design decisions. CANNOT skip gate checks.</div></div>
+</div>
+<p class="note">Each role operates in its own context. Cross-contamination isn't discouraged. It's impossible.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S6: SA SESSION                               -->
+<!-- ============================================ -->
+<div class="S" data-i="5">
+<div class="center">
+<div class="tg">Watch it work</div>
+<h2>The Architect identifies. The Authority decides. <span class="g">One word.</span></h2>
+<div class="trm narrow">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">Strategic Architect &mdash; Session 14</span></div>
+<div class="trm-body">
+<div class="ln" data-d="0"><span class="role-sa">SA:</span> <span class="out">Session auth has no expiry check. Tokens live forever</span></div>
+<div class="ln" data-d="100"><span class="out">    after unlock. Agent at 9am can use token at midnight.</span></div>
+<div class="ln" data-d="400"></div>
+<div class="ln" data-d="500"><span class="out">    Recommendation: TTL field on session tokens.</span></div>
+<div class="ln" data-d="600"><span class="out">    Default 8 hours. Configurable.</span></div>
+<div class="ln" data-d="800"></div>
+<div class="ln" data-d="900"><span class="out">    Draft amendment:</span></div>
+<div class="ln" data-d="1000"><span class="hl">    AM-044: SESSION TOKEN TTL</span></div>
+<div class="ln" data-d="1100"><span class="out">    All session tokens MUST have bounded lifetime.</span></div>
+<div class="ln" data-d="1200"><span class="out">    Enforcement: state.rs &mdash; reject expired tokens</span></div>
+<div class="ln" data-d="1300"><span class="out">    Gate: grep -c "token_ttl" state.rs &gt;= 1</span></div>
+<div class="ln" data-d="1600"></div>
+<div class="ln" data-d="1800"><span class="role-ca">CA:</span> <span class="cm">ratify. default 4 hours not 8.</span></div>
+<div class="ln" data-d="2200"></div>
+<div class="ln" data-d="2400"><span class="role-sa">SA:</span> <span class="out">Ratified as AM-044 with 4-hour default.</span></div>
+<div class="ln" data-d="2600"><span class="out">    Drafting dispatch for Executor.</span></div>
+</div>
+</div>
+<p class="note">The CA changed the TTL from 8 to 4 hours in six words. That's now a permanent, enforceable amendment.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S7: DISPATCH                                 -->
+<!-- ============================================ -->
+<div class="S" data-i="6">
+<div class="center">
+<div class="tg">Dispatches</div>
+<h2>Blueprints with teeth.</h2>
+<div class="trm narrow">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">DISPATCH-041.md</span></div>
+<div class="trm-body">
+<div class="ln" data-d="0"><span class="hl">DISPATCH-041: Session Token TTL</span></div>
+<div class="ln" data-d="100"><span class="out">Goal: Enforce bounded lifetime on session tokens</span></div>
+<div class="ln" data-d="200"><span class="out">Amendment: AM-044 (RATIFIED)  &bull;  Chunks: 2  &bull;  Gates: 5</span></div>
+<div class="ln" data-d="400"></div>
+<div class="ln" data-d="500"><span class="cm">CHUNK 1: Add TTL to DaemonState</span></div>
+<div class="ln" data-d="600"><span class="out">  File: <span class="path">src/state.rs</span></span></div>
+<div class="ln" data-d="700"><span class="out">  Add: token_ttl: Duration field</span></div>
+<div class="ln" data-d="800"><span class="out">  Add: issued_at: Instant on each token</span></div>
+<div class="ln" data-d="1000"></div>
+<div class="ln" data-d="1100"><span class="cm">CHUNK 2: Enforce expiry on redemption</span></div>
+<div class="ln" data-d="1200"><span class="out">  File: <span class="path">src/dispatch.rs</span></span></div>
+<div class="ln" data-d="1300"><span class="out">  Check: now() &gt; issued_at + ttl &rarr; reject</span></div>
+<div class="ln" data-d="1500"></div>
+<div class="ln" data-d="1600"><span class="cm">GATE CHECKS:</span></div>
+<div class="ln" data-d="1700"><span class="out">  1. <span class="pr">grep -c "token_ttl" state.rs</span>    &gt;= 1</span></div>
+<div class="ln" data-d="1800"><span class="out">  2. <span class="pr">grep -c "issued_at" state.rs</span>    &gt;= 1</span></div>
+<div class="ln" data-d="1900"><span class="out">  3. <span class="pr">cargo test -- session_ttl</span>        0 failures</span></div>
+<div class="ln" data-d="2000"><span class="out">  4. <span class="pr">grep -c "unwrap()" state.rs</span>     = 0</span></div>
+<div class="ln" data-d="2100"><span class="out">  5. <span class="pr">cargo clippy -- -D warnings</span>      0 warnings</span></div>
+</div>
+</div>
+<p class="note">Exact files. Exact constraints. Exact verification commands. The Executor builds this. Not more. Not less.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S8: CC SESSION — THE MONEY SLIDE             -->
+<!-- ============================================ -->
+<div class="S" data-i="7">
+<div class="center">
+<div class="tg">Enforcement</div>
+<h2>The AI hit a wall. It couldn't talk its way past <span class="g">grep</span>.</h2>
+<div class="trm narrow">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">claude-code &mdash; Executor &mdash; Dispatch 041</span></div>
+<div class="trm-body">
+<div class="ln" data-d="0"><span class="role-cc">Claude</span> <span class="out">Reading DISPATCH-041. 2 chunks, 5 gates. Starting Chunk 1.</span></div>
+<div class="ln" data-d="400"></div>
+<div class="ln" data-d="500"><span class="cc-tool">Edit</span> <span class="path">src/state.rs</span> <span class="dim">+18 lines</span></div>
+<div class="ln" data-d="700"><span class="out">  Added: token_ttl: Duration (default 4 hours)</span></div>
+<div class="ln" data-d="800"><span class="out">  Added: issued_at: Instant::now() on token creation</span></div>
+<div class="ln" data-d="1000"></div>
+<div class="ln" data-d="1100"><span class="cc-tool">Write</span> <span class="path">tests/session_ttl.rs</span> <span class="dim">+24 lines</span></div>
+<div class="ln" data-d="1300"><span class="out">  test_token_valid_within_ttl ...... <span class="ok">ok</span></span></div>
+<div class="ln" data-d="1400"><span class="out">  test_token_expired_after_ttl ..... <span class="ok">ok</span></span></div>
+<div class="ln" data-d="1500"><span class="out">  test_token_at_exact_boundary ..... <span class="ok">ok</span></span></div>
+<div class="ln" data-d="1800"></div>
+<div class="ln" data-d="1900"><span class="role-cc">Claude</span> <span class="out">Chunk 1 complete. Running gate checks.</span></div>
+<div class="ln" data-d="2100"></div>
+<div class="ln" data-d="2200"><span class="cc-tool">Bash</span> <span class="pr">grep -c "token_ttl" src/state.rs</span></div>
+<div class="ln" data-d="2400"><span class="out">  3</span> &mdash; <span class="ok">PASS</span></div>
+<div class="ln" data-d="2600"><span class="cc-tool">Bash</span> <span class="pr">grep -c "issued_at" src/state.rs</span></div>
+<div class="ln" data-d="2800"><span class="out">  2</span> &mdash; <span class="ok">PASS</span></div>
+<div class="ln" data-d="3000"><span class="cc-tool">Bash</span> <span class="pr">cargo test -- session_ttl</span></div>
+<div class="ln" data-d="3200"><span class="out">  3 passed; 0 failed</span> &mdash; <span class="ok">PASS</span></div>
+<div class="ln" data-d="3500"></div>
+<div class="ln" data-d="3600"><span class="cc-tool">Bash</span> <span class="pr">grep -c "unwrap()" src/state.rs</span></div>
+<div class="ln" data-d="3800"><span class="out">  <span class="er">1</span></span> &mdash; <span class="er">FAIL</span></div>
+<div class="ln" data-d="4100"></div>
+<div class="ln" data-d="4200"><span class="role-cc">Claude</span> <span class="out">Gate 4 failed. Line 87: <span class="er">token_map.get(&amp;id).unwrap()</span></span></div>
+<div class="ln" data-d="4400"><span class="out">  Replacing with <span class="ok">.ok_or(SessionError::NotFound)?</span></span></div>
+<div class="ln" data-d="4600"></div>
+<div class="ln" data-d="4700"><span class="cc-tool">Edit</span> <span class="path">src/state.rs:87</span></div>
+<div class="ln" data-d="4900"><span class="cc-tool">Bash</span> <span class="pr">grep -c "unwrap()" src/state.rs</span></div>
+<div class="ln" data-d="5100"><span class="out">  0</span> &mdash; <span class="ok">PASS</span></div>
+<div class="ln" data-d="5300"></div>
+<div class="ln" data-d="5400"><span class="cc-tool">Bash</span> <span class="pr">cargo clippy -- -D warnings</span></div>
+<div class="ln" data-d="5600"><span class="out">  0 warnings</span> &mdash; <span class="ok">PASS</span></div>
+<div class="ln" data-d="5800"></div>
+<div class="ln" data-d="5900"><span class="role-cc">Claude</span> <span class="ok">All 5 gates pass. Moving to Chunk 2.</span></div>
+</div>
+</div>
+<p class="note">Gate 4 caught an unwrap() the AI wrote without thinking. A bash command returned 1 instead of 0. The AI fixed it and re-ran. No human involved.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S9: ADVERSARIAL                              -->
+<!-- ============================================ -->
+<div class="S" data-i="8">
+<div style="max-width:1200px;width:94%">
+<div class="tg" style="text-align:center">Adversarial</div>
+<h2 style="text-align:center">Different model. Different blind spots. <span class="r">Real findings.</span></h2>
+<div class="three-panel">
+<div class="panel blue" data-d="0"><div class="panel-label b">Architect (Claude)</div><p style="color:var(--t2);margin:0">AM-044 dispatch complete.<br>Token TTL enforced on all paths.<br>Gates: 5/5 PASS.<br><br><span class="b">Assessment: secure.</span></p></div>
+<div class="panel red" data-d="500"><div class="panel-label r">Auditor (Gemini)</div><p style="color:var(--t2);margin:0"><span class="r">[1]</span> TTL check on redemption only. Long HTTP calls (30min) &mdash; token checked at start, not completion. Could expire mid-request.<br><br><span class="dim">[2] Instant (monotonic) &mdash; LOW, actually correct.</span></p></div>
+<div class="panel green" data-d="1000"><div class="panel-label g">Authority (Human)</div><p style="color:var(--t2);margin:0"><span class="role-ca">CA:</span> accept finding 1.<br>reject finding 2.<br><br><span class="ok">AM-044.1 RATIFIED:</span><br>TTL check before AND after external HTTP calls.</p></div>
+</div>
+<p class="note">The Architect's design survived the Executor. It did not survive the Auditor. The Authority decided in twelve words.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S10: CONTEXT DUMP                            -->
+<!-- ============================================ -->
+<div class="S" data-i="9" style="padding:0">
+<div class="split-half">
+<div>
+<div class="tg">End of Session 14</div>
+<h2 style="font-size:1.2rem">Context dump</h2>
+<div class="trm" style="font-size:12.5px">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">context-dump.md</span></div>
+<div class="trm-body">
+<div class="ln" data-d="0"><span class="hl"># SESSION 14 &mdash; April 14</span></div>
+<div class="ln" data-d="100"><span class="cm">## Completed</span></div>
+<div class="ln" data-d="200"><span class="out">- AM-044 ratified (token TTL, 4hr)</span></div>
+<div class="ln" data-d="300"><span class="out">- Dispatch-041: 2 chunks, 5 gates PASS</span></div>
+<div class="ln" data-d="400"><span class="out">- AM-044.1 added (TTL around HTTP)</span></div>
+<div class="ln" data-d="500"><span class="out">- Auditor: 2 findings, 1 accepted</span></div>
+<div class="ln" data-d="700"><span class="cm">## Pending</span></div>
+<div class="ln" data-d="800"><span class="out">- Implement AM-044.1 in transport.rs</span></div>
+<div class="ln" data-d="900"><span class="out">- Begin Dispatch-042 (rate limiting)</span></div>
+</div>
+</div>
+</div>
+<div>
+<div class="tg" style="color:var(--g)">Session 15 resumes</div>
+<h2 style="font-size:1.2rem"><span class="g">Picks up mid-sentence.</span></h2>
+<div class="trm" style="font-size:12.5px">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">claude-code &mdash; Session 15</span></div>
+<div class="trm-body">
+<div class="ln" data-d="1000"><span class="role-cc">Claude</span> <span class="out">Reading context dump from Session 14.</span></div>
+<div class="ln" data-d="1200"><span class="out">  AM-044.1 pending in <span class="path">transport.rs</span>.</span></div>
+<div class="ln" data-d="1400"><span class="out">  Starting implementation.</span></div>
+<div class="ln" data-d="1700"></div>
+<div class="ln" data-d="1800"><span class="cc-tool">Edit</span> <span class="path">src/transport.rs</span></div>
+<div class="ln" data-d="2000"><span class="out">  Added TTL re-check after HTTP response</span></div>
+<div class="ln" data-d="2200"></div>
+<div class="ln" data-d="2300"><span class="cc-tool">Bash</span> <span class="pr">grep -c "check_ttl" transport.rs</span></div>
+<div class="ln" data-d="2500"><span class="out">  2 (before + after)</span> &mdash; <span class="ok">PASS</span></div>
+<div class="ln" data-d="2800"></div>
+<div class="ln" data-d="2900"><span class="role-cc">Claude</span> <span class="ok">AM-044.1 complete. Ready for Dispatch-042.</span></div>
+</div>
+</div>
+</div>
+</div>
+<div class="bottom">Sessions end. Context doesn't. The dump IS the memory.</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S11: AMENDMENTS                              -->
+<!-- ============================================ -->
+<div class="S" data-i="10">
+<div class="center">
+<div class="tg">Institutional Memory</div>
+<h2>Every decision recorded. Every decision enforceable.</h2>
+<div class="trm narrow">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">amendment log &mdash; 60+ ratified</span></div>
+<div class="trm-body">
+<div class="ln" data-d="0"><span class="hl">#AM-058</span>  <span class="ok">RATIFIED</span></div>
+<div class="ln" data-d="100"><span class="out">  All HTTP calls must route through SSRF pipeline.</span></div>
+<div class="ln" data-d="200"><span class="out">  Verify: <span class="pr">grep -rn "Client::new" src/ | grep -v transport/</span></span></div>
+<div class="ln" data-d="300"><span class="ok">  PASS: 0 matches</span></div>
+<div class="ln" data-d="500"></div>
+<div class="ln" data-d="600"><span class="hl">#AM-044</span>  <span class="ok">RATIFIED</span></div>
+<div class="ln" data-d="700"><span class="out">  Session tokens MUST have bounded lifetime (4hr).</span></div>
+<div class="ln" data-d="800"><span class="out">  Verify: <span class="pr">grep -c "token_ttl" state.rs</span></span></div>
+<div class="ln" data-d="900"><span class="ok">  PASS: 3 matches</span></div>
+<div class="ln" data-d="1100"></div>
+<div class="ln" data-d="1200"><span class="hl">#AM-031</span>  <span class="ok">RATIFIED</span></div>
+<div class="ln" data-d="1300"><span class="out">  Zero unwrap() in error-handling paths.</span></div>
+<div class="ln" data-d="1400"><span class="ok">  PASS: 0</span></div>
+<div class="ln" data-d="1600"></div>
+<div class="ln" data-d="1700"><span class="hl">#AM-019</span>  <span class="ok">RATIFIED</span></div>
+<div class="ln" data-d="1800"><span class="out">  Fuzz targets required for all parser entry points.</span></div>
+<div class="ln" data-d="1900"><span class="ok">  PASS: 14 targets</span></div>
+</div>
+</div>
+<p class="note">They accumulate. They never expire. Run them all to verify the entire governance state.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S12: THE NUMBERS                             -->
+<!-- ============================================ -->
+<div class="S" data-i="11">
+<div style="max-width:900px;width:92%">
+<div class="tg" style="text-align:center">Proven</div>
+<h2 style="text-align:center">Built and shipped. Not theorized.</h2>
+<div style="margin-top:1.2rem">
+<div class="stat-row" data-d="0"><div class="stat-label">Production code shipped</div><div class="stat-bar" data-w="95%" style="background:var(--g)">50,000 LOC</div></div>
+<div class="stat-row" data-d="150"><div class="stat-label">Timeline</div><div class="stat-bar" data-w="28%" style="background:var(--b)">60 days</div></div>
+<div class="stat-row" data-d="300"><div class="stat-label">Tests + fuzz executions</div><div class="stat-bar" data-w="88%" style="background:var(--y)">1 billion+</div></div>
+<div class="stat-row" data-d="450"><div class="stat-label">Ratified amendments</div><div class="stat-bar" data-w="32%" style="background:var(--b)">60+</div></div>
+<div class="stat-row" data-d="600"><div class="stat-label">Architecture breaches</div><div class="stat-bar" data-w="4%" style="background:var(--r)">0</div></div>
+</div>
+<p style="margin:1.5rem auto 0;text-align:center;font-size:15px">1 human. Multiple AI models. Structural governance.</p>
+<div class="sub" style="text-align:center">Framework proven on <a href="https://hermeticsys.com" style="color:var(--g);text-decoration:none">hermeticsys.com</a></div>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S13: BEFORE / AFTER                          -->
+<!-- ============================================ -->
+<div class="S full-bleed" data-i="12" style="padding:0">
+<div class="compare">
+<div class="compare-col before">
+<div class="compare-label r">Without HAIG</div>
+<div class="compare-item" data-d="0"><h3 style="color:var(--t)">"Build auth system"</h3><p class="out">AI writes 400 lines. Reviews own code: "LGTM." Ships. SQL injection found in production 2 weeks later.</p></div>
+<div class="compare-item" data-d="300"><h3 style="color:var(--t)">"Add session tokens"</h3><p class="out">AI adds tokens with no expiry. Nobody notices for 3 months. Memory leak. Incident at 2am.</p></div>
+<div class="compare-item" data-d="600"><h3 style="color:var(--t)">"Handle config parsing"</h3><p class="out">AI uses .unwrap() everywhere. Review: "looks fine." First malformed config crashes the service.</p></div>
+</div>
+<div class="compare-col after">
+<div class="compare-label g">With HAIG</div>
+<div class="compare-item" data-d="200"><h3 style="color:var(--t)">"Build auth system"</h3><p class="out">SA drafts dispatch with 12 gate checks. AA reviews. Gate catches SQL concat in chunk 2. Fixed before chunk 3.</p></div>
+<div class="compare-item" data-d="500"><h3 style="color:var(--t)">"Add session tokens"</h3><p class="out">AM-044: TTL MUST be bounded. Dispatch specifies 4-hour default. Gate: grep for ttl + issued_at. Enforced at build time.</p></div>
+<div class="compare-item" data-d="800"><h3 style="color:var(--t)">"Handle config parsing"</h3><p class="out">AM-031: Zero unwrap(). Gate: grep -c unwrap = 0. AI writes unwrap, gate fails, AI fixes. 30-second loop.</p></div>
+</div>
+</div>
+<div class="bottom">Same tasks. Same AI. Different outcomes. HAIG makes mistakes visible before production.</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S14: WHAT YOU GET                            -->
+<!-- ============================================ -->
+<div class="S" data-i="13">
+<div class="center">
+<div class="tg">Open Source</div>
+<h2>MIT license. Use it today.</h2>
+<div class="trm narrow">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">terminal</span></div>
+<div class="trm-body">
+<div class="ln" data-d="0"><span class="pr">$</span> <span class="cmd">git clone https://github.com/hermetic-sys/haig</span></div>
+<div class="ln" data-d="400"></div>
+<div class="ln" data-d="500"><span class="out">haig/</span></div>
+<div class="ln" data-d="600"><span class="out">  docs/</span></div>
+<div class="ln" data-d="700"><span class="out">    philosophy.md         <span class="dim">&mdash; governance rules</span></span></div>
+<div class="ln" data-d="800"><span class="out">    roles.md              <span class="dim">&mdash; role definitions</span></span></div>
+<div class="ln" data-d="900"><span class="out">    dispatch-pipeline.md  <span class="dim">&mdash; blueprint format</span></span></div>
+<div class="ln" data-d="1000"><span class="out">    amendments.md         <span class="dim">&mdash; binding decisions</span></span></div>
+<div class="ln" data-d="1100"><span class="out">    getting-started.md    <span class="dim">&mdash; 10-min walkthrough</span></span></div>
+<div class="ln" data-d="1300"><span class="out">  templates/              <span class="dim">&mdash; dispatch, amendment, gate</span></span></div>
+<div class="ln" data-d="1500"><span class="out">  examples/</span></div>
+<div class="ln" data-d="1600"><span class="out">    nextjs-auth/          <span class="dim">&mdash; complete Node.js example</span></span></div>
+<div class="ln" data-d="1700"><span class="out">    rust-cli/             <span class="dim">&mdash; complete Rust example</span></span></div>
+<div class="ln" data-d="1900"><span class="out">  CLAUDE.md               <span class="dim">&mdash; drop into any project</span></span></div>
+</div>
+</div>
+<p style="margin:.5rem auto 0;text-align:center">Works with any AI model. Any language. Any codebase. No vendor lock-in.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S15: GET STARTED                             -->
+<!-- ============================================ -->
+<div class="S" data-i="14">
+<div class="center">
+<div class="tg">Start Now</div>
+<h2>10 minutes. Any project. Any AI tool.</h2>
+<div class="trm narrow">
+<div class="trm-bar"><div class="trm-dot" style="background:#ff5f56"></div><div class="trm-dot" style="background:#ffbd2e"></div><div class="trm-dot" style="background:#27c93f"></div><span class="trm-title">your terminal</span></div>
+<div class="trm-body">
+<div class="ln" data-d="0"><span class="dim"># Step 1: Add governance (30 seconds)</span></div>
+<div class="ln" data-d="200"><span class="pr">$</span> <span class="cmd">curl -o CLAUDE.md https://raw.githubusercontent.com/hermetic-sys/haig/main/CLAUDE.md</span></div>
+<div class="ln" data-d="600"></div>
+<div class="ln" data-d="700"><span class="dim"># Step 2: Open your AI coding tool</span></div>
+<div class="ln" data-d="900"><span class="cc-prompt">&gt;</span> <span class="cm">"Read CLAUDE.md. You are the Executor.</span></div>
+<div class="ln" data-d="1100"><span class="cm">   I am the Authority.</span></div>
+<div class="ln" data-d="1300"><span class="cm">   Create DISPATCH-001 for [your feature]."</span></div>
+<div class="ln" data-d="1600"></div>
+<div class="ln" data-d="1700"><span class="dim"># Step 3: Review the dispatch. Say "ratify" or "reject."</span></div>
+<div class="ln" data-d="2000"><span class="dim"># Step 4: Execute. AI builds, runs gates, reports.</span></div>
+<div class="ln" data-d="2300"><span class="dim"># Step 5: Context dump at end of session.</span></div>
+<div class="ln" data-d="2600"></div>
+<div class="ln" data-d="2800"><span class="ok"># That's it. You have governance.</span><span class="cursor-blink"></span></div>
+</div>
+</div>
+<p class="note">Works with Claude Code, Cursor, Windsurf, Copilot, Aider &mdash; any AI that reads project files.</p>
+</div>
+</div>
+
+<!-- ============================================ -->
+<!-- S16: CLOSE                                   -->
+<!-- ============================================ -->
+<div class="S" data-i="15">
+<div class="center">
+<div style="margin-bottom:3rem">
+<p style="font-size:clamp(1.1rem,1.8vw,1.4rem);color:var(--t);margin:0 auto 1.2rem;text-align:center" class="fade-line" data-d="0">The AI writes the code.</p>
+<p style="font-size:clamp(1.1rem,1.8vw,1.4rem);color:var(--t);margin:0 auto 1.2rem;text-align:center" class="fade-line" data-d="800">The gate decides if it passes.</p>
+<p style="font-size:clamp(1.1rem,1.8vw,1.4rem);color:var(--t);margin:0 auto 1.2rem;text-align:center" class="fade-line" data-d="1600">The amendment makes it permanent.</p>
+<p style="font-size:clamp(1.4rem,2.2vw,1.8rem);color:var(--g);margin:0 auto;text-align:center;font-weight:700" class="fade-line" data-d="2400"><span class="gw">You are the Authority.</span></p>
+</div>
+<div class="dv" style="margin:0 auto"></div>
+<h1 style="font-size:2.2rem;text-align:center;margin-top:1.5rem"><span class="g gw">HAIG</span></h1>
+<p style="margin:.5rem auto 0;text-align:center;font-size:12px;color:var(--t3)">Human-AI Integrated Governance</p>
+<p style="margin:1.5rem auto 0;text-align:center;font-size:15px"><a href="https://github.com/hermetic-sys/haig" style="color:var(--g);text-decoration:none" class="gw">github.com/hermetic-sys/haig</a></p>
+<div class="sub">Built by The Hermetic Project &middot; hermeticsys.com &middot; MIT License</div>
+</div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+<span id="counter">1 / 16</span>
+<div class="nav">
+<button onclick="go(-1)">&larr; Prev</button>
+<button onclick="go(1)">Next &rarr;</button>
+</div>
+</div>
+
+<script>
+const slides=document.querySelectorAll('.S'),total=slides.length;
+let cur=0;
+const twText="Your AI reviews its own code and calls it correct.";
+let twDone=false;
+function typewriter(){
+  if(twDone)return;twDone=true;
+  const el=document.getElementById('typewriter'),cs=document.getElementById('tw-cursor');
+  let i=0;
+  const iv=setInterval(()=>{
+    if(i<twText.length){el.textContent+=twText[i];i++;}
+    else{clearInterval(iv);cs.style.display='none';setTimeout(()=>document.getElementById('hook-body').style.opacity='1',500);}
+  },45);
+}
+function show(n){
+  cur=Math.max(0,Math.min(total-1,n));
+  slides.forEach(s=>s.classList.remove('on'));
+  slides[cur].classList.add('on');
+  document.getElementById('counter').textContent=(cur+1)+' / '+total;
+  document.getElementById('bar').style.width=((cur+1)/total*100)+'%';
+  anim(slides[cur]);
+  if(cur===0)typewriter();
+}
+function go(d){show(cur+d)}
+function anim(sl){
+  sl.querySelectorAll('.trm .ln').forEach(ln=>{ln.classList.remove('sh');setTimeout(()=>ln.classList.add('sh'),parseInt(ln.dataset.d||0));});
+  sl.querySelectorAll('.card[data-d]').forEach(c=>{c.classList.remove('sh');setTimeout(()=>c.classList.add('sh'),parseInt(c.dataset.d||0));});
+  sl.querySelectorAll('.flow-box[data-d],.flow-arr[data-d]').forEach(el=>{el.classList.remove('sh','active');setTimeout(()=>el.classList.add('sh'),parseInt(el.dataset.d||0));});
+  sl.querySelectorAll('.three-panel .panel[data-d]').forEach(p=>{p.classList.remove('sh');setTimeout(()=>p.classList.add('sh'),parseInt(p.dataset.d||0));});
+  sl.querySelectorAll('.stat-row').forEach(r=>{r.classList.remove('sh');const b=r.querySelector('.stat-bar');if(b)b.style.width='0';setTimeout(()=>{r.classList.add('sh');if(b)b.style.width=b.dataset.w;},parseInt(r.dataset.d||0)+200);});
+  sl.querySelectorAll('.fade-line').forEach(l=>{l.style.opacity='0';setTimeout(()=>l.style.opacity='1',parseInt(l.dataset.d||0));});
+  sl.querySelectorAll('.compare-item').forEach(c=>{c.classList.remove('sh');setTimeout(()=>c.classList.add('sh'),parseInt(c.dataset.d||0));});
+}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' ')go(1);if(e.key==='ArrowLeft')go(-1);if(e.key==='f')document.documentElement.requestFullscreen?.();});
+document.addEventListener('click',e=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='A')return;e.clientX>window.innerWidth/2?go(1):go(-1);});
+let tx=0;
+document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;});
+document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>50){dx>0?go(-1):go(1);}});
+show(0);
+</script>
+</body>
+</html>

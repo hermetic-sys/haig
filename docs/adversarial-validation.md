@@ -43,3 +43,26 @@ Use at least two models for critical designs. The cost is one additional chat se
 The Auditor must operate in a fresh context window. It should not have access to the Architect's reasoning, design tradeoffs, or rejected alternatives. These create anchoring effects — the Auditor starts defending the design instead of attacking it.
 
 A separate instance of the same model works if a different model is unavailable. The key is a clean context with no prior design reasoning.
+
+## Context Control
+
+The Auditor's effectiveness depends on what it does and does not see. Context control is not a suggestion — it is the mechanism that makes adversarial review actually adversarial.
+
+**The Auditor receives ONLY:**
+
+- The design document or architecture brief for the feature under review
+- The amendment registry (binding rules the design must comply with)
+- The specific dispatch being audited
+
+**The Auditor does NOT receive:**
+
+- Executor logs or implementation details
+- The Architect's internal analysis, reasoning, or rejected alternatives
+- Prior session context dumps
+- DevOps reports from previous dispatches
+
+**Why this matters:** If the Auditor sees the Architect's reasoning, it anchors on the same assumptions. The Auditor reads "I chose HMAC-SHA256 because X" and evaluates whether X is reasonable — instead of independently assessing whether HMAC-SHA256 is the right choice at all. The Architect's justification becomes the frame, and the Auditor validates instead of attacking.
+
+The Authority controls what the Auditor sees. The Architect prepares a clean brief for Auditor consumption — the design and its constraints, stripped of the reasoning behind it. The Auditor attacks what was built, not why it was built that way.
+
+Using a different model for the Auditor is recommended but not mandatory. What IS mandatory is context isolation. A same-model Auditor with a clean context is more effective than a different-model Auditor that has been anchored by the Architect's analysis.

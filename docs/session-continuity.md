@@ -36,6 +36,25 @@ Context dumps are internal documents. They are detailed and unpolished. Their pu
 
 Write context dumps as if explaining to a competent developer who has never seen the project. Avoid pronouns that reference prior conversation ("as we discussed"). State facts directly.
 
+## Document Hierarchy
+
+Context dumps are not the only context artifact. In mature HAIG projects, the full document hierarchy is:
+
+1. **Constitution / Amendment Registry** — permanent, grows over time. The binding rules of the project. Every role references this.
+2. **Architecture Document** — versioned, updated at milestones. The system design. The Architect owns this.
+3. **DevOps Reports** — one per dispatch. Records what was built, what deviated, what gates found. The evidence trail.
+4. **Context Dumps** — one per session. Handover to the next session. Ephemeral but critical.
+5. **Recon Output** — one per session start. What the codebase actually looks like right now. Ground truth.
+
+Each role loads different documents:
+
+- **Architect**: latest context dump + latest recon + relevant DevOps reports + constitution. This IS the Architect's memory.
+- **Executor**: the dispatch + recon output. Focused scope — the Executor doesn't need the full governance history.
+- **Auditor**: the design brief + amendment registry only. Context isolation is mandatory (see adversarial-validation.md).
+- **Authority**: everything, at their discretion.
+
+When starting a new session, the Architect loads the full chain. The first action is always recon (see recon.md). The Architect compares recon output against the latest context dump to detect drift. If drift is significant, dispatches may need amendment before execution begins.
+
 ## Template
 
 Use `templates/context-dump-template.md` to create session context dumps. Fill in every section — incomplete dumps lead to incomplete resumption.

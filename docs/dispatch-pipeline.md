@@ -45,6 +45,27 @@ After all chunks are complete, a final gate covers the entire dispatch. This gat
 
 Use `templates/dispatch-template.md` as the starting point for every dispatch. Fill in the placeholders, define the chunks, write the gates. The template enforces the structure — you provide the content.
 
+## Mismatch Reporting
+
+If the Executor discovers during recon or execution that the dispatch's assumptions don't match reality, execution STOPS. This is not optional. This is not a soft guideline. The Executor halts and reports.
+
+The mismatch report contains:
+
+1. What the dispatch assumed (with specific references to the dispatch text)
+2. What the code actually does (with file paths and line numbers)
+3. The specific divergence that makes the dispatch unexecutable as written
+
+The Architect then produces one of two artifacts:
+
+- **Amended dispatch** — the dispatch is corrected and re-ratified by the Authority
+- **Deviation approval** — the Architect acknowledges the mismatch and authorizes a specific deviation from the original dispatch
+
+The Executor cannot proceed without one of these. There is no third option. The Executor does not guess, improvise, or "do what seems right." The hard rule:
+
+**When in doubt, stop and report. Never improvise past a mismatch.**
+
+This rule exists because of real experience: an Executor that improvises past a mismatch produces code that satisfies gate checks but violates the Architect's intent. The gates check structure. They cannot check intent. Only the Architect can verify intent, and only if the Executor reports the mismatch first.
+
 ## Key Principle
 
 The dispatch is a contract. The Architect writes it. The Authority ratifies it. The Executor implements it. If the dispatch is wrong, the fix goes through the Architect — the Executor does not improvise.

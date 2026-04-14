@@ -2,6 +2,10 @@
 
 A 10-minute walkthrough to apply HAIG to any project. This works for Node, Python, Rust, Go, or any language — the framework is language-agnostic.
 
+## Step 0: Recon (1 minute)
+
+Before your first dispatch, run a recon script to understand your codebase. Check: does it build? How many tests exist? What's the file structure? Share the output with your AI Architect. This is the ground truth that all dispatches are written against. See `docs/recon.md` for the full recon protocol and a template script.
+
 ## Step 1: Add CLAUDE.md (1 minute)
 
 Copy the HAIG CLAUDE.md to your project root:
@@ -42,9 +46,11 @@ Pick a small feature. Create `.haig/dispatches/001-feature-name.md` using the di
 
 Break it into 2-3 chunks. For each chunk, write a gate — a bash script with `set -e` that verifies the chunk is complete. Keep the first dispatch small: one new file, one modified file, a handful of checks.
 
-## Step 5: Execute (2 minutes)
+## Step 5: Plan, then execute (2 minutes)
 
-Give the dispatch to the Executor (your AI coding tool). It reads CLAUDE.md, sees the gate protocol, and implements chunk by chunk. After each chunk, it runs the gate.
+Give the dispatch to the Executor (your AI coding tool). Before it starts writing code, it produces a plan: "Here's what the dispatch says, here's what the codebase looks like, here are any mismatches." Review the plan before saying "proceed." Check that the plan's understanding of your codebase matches reality. See `docs/plan-mode.md` for details.
+
+After plan approval, the Executor implements chunk by chunk. After each chunk, it runs the gate.
 
 ## Step 6: Run the gate (30 seconds)
 

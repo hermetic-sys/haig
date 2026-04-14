@@ -139,8 +139,11 @@ Then write your first dispatch using `templates/dispatch-template.md`.
 - [Philosophy](docs/philosophy.md) — Why role separation matters
 - [Roles](docs/roles.md) — The four roles defined
 - [Dispatch Pipeline](docs/dispatch-pipeline.md) — Blueprint to execution to verification
+- [Recon](docs/recon.md) — Understanding the codebase before acting
+- [Plan Mode](docs/plan-mode.md) — Validate before you build
 - [Amendments](docs/amendments.md) — Encoding decisions as binding rules
 - [Adversarial Validation](docs/adversarial-validation.md) — Using a second AI to attack the first
+- [Reports](docs/reports.md) — Documenting every step
 - [Session Continuity](docs/session-continuity.md) — Maintaining context across sessions
 - [Getting Started](docs/getting-started.md) — 10-minute walkthrough
 

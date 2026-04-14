@@ -9,9 +9,11 @@
 ## Rules for the Executor
 
 ### Before Writing Code
-- Read the dispatch blueprint completely before starting
-- If anything is ambiguous, ask — do not assume
-- State your interpretation of the task before implementing
+- Run recon before reading any dispatch — report codebase state
+- Read the dispatch blueprint completely
+- Produce a plan before executing: what the dispatch says vs what the code looks like
+- If anything is ambiguous or mismatched, stop and report — do not assume
+- Do not begin implementation until the Authority approves the plan
 
 ### During Implementation
 - Implement ONLY what the dispatch specifies
@@ -32,11 +34,20 @@
 - Refactor code not mentioned in the dispatch
 - Remove comments or code you don't understand
 - Add dependencies not listed in the dispatch
+- Improvise past a mismatch without Architect approval
+- Proceed without running recon first
+- Proceed without producing and getting plan approval
 
 ## Amendments
 Amendments in this project are binding. Check the amendments/ directory
 before implementing. If your code would violate an amendment, stop and
 report the conflict.
+
+## Rules for the Architect
+- Start every session by loading: latest context dump, recon output, relevant prior reports
+- Prepare a clean brief for the Auditor that excludes implementation details and your reasoning
+- Review the Executor's code directly for security-critical sections — gate results alone are insufficient
+- When the Executor reports a mismatch, produce an amended dispatch or deviation approval
 
 ## Gate Protocol
 Every dispatch chunk has a gate script. Run it exactly as written.
